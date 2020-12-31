@@ -67,7 +67,7 @@ class Turbomole(logfileparser.Logfile):
         """
         # TODO more work could be required, but we don't have any logfiles
         # with non-C1 symmetry.
-        return label[0].upper() + label[1:]
+        return label.capitalize()
 
     def before_parsing(self):
         self.geoopt = False # Is this a GeoOpt? Needed for SCF targets/values.
@@ -119,7 +119,7 @@ class Turbomole(logfileparser.Logfile):
         if line[3:11] == "nbf(AO)=":
             nmo = int(line.split('=')[1])
             self.set_attribute('nbasis', nmo)
-            self.set_attribute('nmo', nmo)
+            #self.set_attribute('nmo', nmo)
             
         # The DFT functional.
         # This information is printed by dscf but not in an easily parsable format, so we'll take it from the control file instead...
@@ -257,31 +257,113 @@ class Turbomole(logfileparser.Logfile):
         #     irrep                 35a         36a         37a         38a         39a   
         #  eigenvalues H         -0.28091    -0.15088    -0.09343    -0.07531    -0.00688
         #             eV          -7.6440     -4.1058     -2.5424     -2.0493     -0.1873
-        if "will be written to file mos" in line:
+        if "will be written to file mos" in line and hasattr(self, "mosyms"):
             orbitals, line = self.parse_dscf_orbitals(inputfile, line)
-            homo = [orbital for orbital in orbitals if orbital['occupancy'] != 0][-1]
-            self.set_attribute('homos', [homo['index']])
+            self.set_attribute("homos", [self.determine_homo(self.mosyms[0], orbitals)])
         
-        if "alpha:" in line:
+        if "alpha:" in line and hasattr(self, "mosyms"):
             orbitals, line = self.parse_dscf_orbitals(inputfile, line)
-            homo = [orbital for orbital in orbitals if orbital['occupancy'] != 0][-1]
+            homo = self.determine_homo(self.mosyms[0], orbitals)
             if not hasattr(self, "homos"):
-                self.set_attribute('homos', [homo['index']])
+                self.set_attribute('homos', [homo])
             else:
-                self.homos[0] = homo['index']
+                self.homos[0] = homo
             
-        if "beta:" in line:
+        if "beta:" in line and hasattr(self, "mosyms"):
             orbitals, line = self.parse_dscf_orbitals(inputfile, line)
-            homo = [orbital for orbital in orbitals if orbital['occupancy'] != 0][-1]
+            homo = self.determine_homo(self.mosyms[1], orbitals)
             if not hasattr(self, "homos"):
-                self.set_attribute('homos', [None, homo['index']])
+                self.set_attribute('homos', [homo])
             elif len(self.homos) == 1:
-                self.homos.append(homo['index'])
+                self.homos.append(homo)
             else:
-                self.homos[1] = homo['index']
-                
+                self.homos[1] = homo
         
-        # Coord gradients.
+        # Coordinates and gradients from statpt.
+        #   *************************************************************************
+        #  ATOM                      CARTESIAN COORDINATES
+        #   1 c      -2.67642286424381      0.00038527796998     -0.44566112589039
+        #   2 c      -1.69183504162310      0.00075591605173      2.05352357416443
+        #   3 c       0.92311977253458      0.00052122921704      2.48381308900370
+        #   4 c       2.67642286424491      0.00038528140768      0.44566112589851
+        #   5 c       1.69183504161656      0.00075592009652     -2.05352357415432
+        #   6 h      -2.98983238801665      0.00149374762706      3.67174843088014
+        #   7 h       1.64279730150941      0.00038458181684      4.43158185858240
+        #   8 h       2.98983238800216      0.00149376082387     -3.67174843087059
+        #   9 c       5.44975417206469     -0.00039526372012      1.01184691031725
+        #  10 c       7.34299179214000     -0.00071986894317     -0.68271530533475
+        #  11 h       7.01332300460381     -0.00029648805084     -2.72785997302809
+        #  12 h       5.91422629512709     -0.00052260839470      3.03917498747826
+        #  13 h       9.32456490822245     -0.00139866158379     -0.07769877084777
+        #  14 c      -5.44975417205833     -0.00039526324514     -1.01184691032156
+        #  15 h      -5.91422629512079     -0.00052260600240     -3.03917498748360
+        #  16 c      -7.34299179213657     -0.00071986698481      0.68271530532303
+        #  17 h      -7.01332300460557     -0.00029648750734      2.72785997301777
+        #  18 h      -9.32456490821458     -0.00139865699894      0.07769877082649
+        #  19 c      -0.92311977253569      0.00052122610063     -2.48381308899233
+        #  20 h      -1.64279730151053      0.00038457006746     -4.43158185856859
+        # *************************************************************************
+        #  ATOM                      CARTESIAN GRADIENTS  
+        #   1 c       0.00001122250995      0.00000667056223      0.00001828623085
+        #   2 c       0.00000193381649     -0.00001184358472      0.00001337145426
+        #   3 c      -0.00000578603102      0.00000187474419      0.00000987215044
+        #   4 c      -0.00001122250794      0.00000667041002     -0.00001828623169
+        #   5 c      -0.00000193381900     -0.00001184350870     -0.00001337145668
+        #   6 h      -0.00001402399615      0.00001821929428     -0.00000611193875
+        #   7 h       0.00001742260704     -0.00000462667818     -0.00000195847724
+        #   8 h       0.00001402399610      0.00001821957100      0.00000611193919
+        #   9 c      -0.00006557131494     -0.00002136001589      0.00002475454295
+        #  10 c       0.00006109842779     -0.00000007565809     -0.00004223963891
+        #  11 h      -0.00002879535900      0.00000574108155     -0.00000337279221
+        #  12 h       0.00004754086240      0.00000863480152     -0.00000658955451
+        #  13 h      -0.00000914653785     -0.00000320753859      0.00003066647865
+        #  14 c       0.00006557131503     -0.00002135978825     -0.00002475454202
+        #  15 h      -0.00004754086227      0.00000863481272      0.00000658955373
+        #  16 c      -0.00006109842855     -0.00000007566316      0.00004223963942
+        #  17 h       0.00002879535887      0.00000574109116      0.00000337279251
+        #  18 h       0.00000914653868     -0.00000320756462     -0.00003066647871
+        #  19 c       0.00000578603127      0.00000187466275     -0.00000987214898
+        #  20 h      -0.00001742260682     -0.00000462696679      0.00000195847629
+        # *************************************************************************
+        #
+        # In older versions (5.9)
+        # ATOM               CARTESIAN GRADIENTS
+        #  1 c      -0.00006249573129     -0.00001452041025     -0.00002380577094
+        #  2 c       0.00007390978833     -0.00000084052225      0.00000584172986
+        #  3 c      -0.00000362984325      0.00000466314052     -0.00002733252443
+        #  4 c       0.00006249783071     -0.00001452158676      0.00002380177091
+        #  5 c      -0.00007390342509     -0.00000084270316     -0.00000584066725
+        #  6 h      -0.00005950589946      0.00000095087455      0.00005137853319
+        #  7 h      -0.00000645073463     -0.00000179899463      0.00003328307243
+        #  8 h       0.00005950123260      0.00000095090879     -0.00005137678599
+        #  9 c      -0.00004885046058     -0.00002593955699     -0.00004887642413
+        # 10 c       0.00000015222157      0.00004027444288      0.00003204866033
+        # 11 h       0.00001239310045      0.00001308636889     -0.00000092060218
+        # 12 h       0.00001561988506     -0.00001608132438      0.00002717833564
+        # 13 h      -0.00000616830304      0.00000016851704     -0.00003103539353
+        # 14 c       0.00004884621752     -0.00002593547764      0.00004887866674
+        # 15 h      -0.00001561780942     -0.00001607888272     -0.00002718198410
+        # 16 c      -0.00000015329549      0.00004026946593     -0.00003204885735
+        # 17 h      -0.00001239289077      0.00001308531162      0.00000092210161
+        # 18 h       0.00000616838338      0.00000016858902      0.00003103523777
+        # 19 c       0.00000362187006      0.00000466096401      0.00002733645543
+        # 20 h       0.00000645786975     -0.00000179869042     -0.00003328556910
+        #     Optint: norm of internal gradient       0.00029710
+        #
+        if "CARTESIAN GRADIENTS" in line:
+            atomcoords = []
+            atomnos = []
+            line = next(inputfile)
+            while len(line.split()) == 5:
+                atomnos.append(self.periodic_table.number[line.split()[-4].capitalize()])
+                atomcoords.append([utils.convertor(float(x), "bohr", "Angstrom") 
+                                   for x in line.split()[-3:]])
+                line = next(inputfile)
+            
+            self.set_attribute('atomnos', atomnos)
+            self.set_attribute('natom', len(atomcoords))
+            self.append_attribute("grads", atomcoords)
+                
         
         
         ## Atomic coordinates in job.last:
@@ -311,7 +393,7 @@ class Turbomole(logfileparser.Logfile):
             atomcoords = []
             atomnos = []
             line = next(inputfile)
-            while len(line) > 2:
+            while len(line.split()) >= 3:
                 atomnos.append(self.periodic_table.number[line.split()[3].capitalize()])
                 atomcoords.append([utils.convertor(float(x), "bohr", "Angstrom") 
                                    for x in line.split()[:3]])
@@ -493,12 +575,15 @@ class Turbomole(logfileparser.Logfile):
 
             moenergies = []
             mocoeffs = []
+            mosyms = []
 
             while not line.strip().startswith('$'):
+                number, sym = line.split()[:2]
                 info = re.match(r".*eigenvalue=(?P<moenergy>[0-9D\.+-]{20})\s+nsaos=(?P<count>\d+).*", line)
                 eigenvalue = utils.float(info.group('moenergy'))
                 orbital_energy = utils.convertor(eigenvalue, 'hartree', 'eV')
                 moenergies.append(orbital_energy)
+                mosyms.append(self.normalisesym(sym))
                 single_coeffs = []
                 nsaos = int(info.group('count'))
 
@@ -513,15 +598,16 @@ class Turbomole(logfileparser.Logfile):
             for i in mocoeffs:
                 while len(i) < max_nsaos:
                     i.append(numpy.nan)
-
-            if not hasattr(self, 'mocoeffs'):
-                self.mocoeffs = []
-
-            if not hasattr(self, 'moenergies'):
-                self.moenergies = []
-
-            self.mocoeffs.append(mocoeffs)
-            self.moenergies.append(moenergies)
+            
+            # We now need to sort our orbitals (because Turbomole groups them by symm).
+            mos = list(zip(moenergies, mocoeffs, mosyms))
+            mos.sort(key = lambda mo: mo[0])
+            moenergies, mocoeffs, mosyms = zip(*mos)
+            
+            self.append_attribute("moenergies", moenergies)
+            self.append_attribute("mocoeffs", mocoeffs)
+            self.append_attribute("mosyms", mosyms)
+            self.set_attribute("nmo", len(moenergies))
 
         # Parsing the scfenergies, scfvalues and scftargets from job.last file.
         # scf convergence criterion : increment of total energy < .1000000D-05
@@ -562,6 +648,10 @@ class Turbomole(logfileparser.Logfile):
             iter_energy = []
             iter_one_elec_energy = []
             while 'convergence criteria satisfied' not in line:
+                # nbasis
+                if  "number of basis functions" in line:
+                    self.set_attribute("nbasis", int(line.split()[-1]))
+                
                 if 'ITERATION  ENERGY' in line:
                     line = next(inputfile)
                     info = line.split()
@@ -652,7 +742,16 @@ class Turbomole(logfileparser.Logfile):
             mp2energy = [utils.convertor(utils.float(line.split()[3]), 'hartree', 'eV')]
             self.append_attribute('mpenergies', mp2energy)
             self.metadata['methods'].append("MP2")
-            
+    
+    def split_irrep(self, irrep):
+        """
+        Split a Turbomole irrep into number and symmetry.
+        """
+        rematch = re.match(r"^([0-9]+)(.+)$", irrep)
+        number = int(rematch.group(1))
+        sym = self.normalisesym(rematch.group(2))
+        return (number, sym)
+    
     def parse_dscf_orbitals(self, inputfile, line):
         """
         Extract orbital occupation and energies from a dscf logfile.
@@ -704,7 +803,7 @@ class Turbomole(logfileparser.Logfile):
         
         orbitals = []
         while True: 
-            indices = []
+            irreps = []
             energies_hartree = []
             energies_eV = []
             occupations = []
@@ -717,7 +816,8 @@ class Turbomole(logfileparser.Logfile):
                 # All done.
                 break
             else:
-                indices = [int(irrep[:-1]) -1 for irrep in line.split()[1:]]
+                # Turbomole lists orbitals of different symmetry separately.
+                irreps = line.split()[1:]
             
             # Energy in H.
             line = next(inputfile)
@@ -733,18 +833,53 @@ class Turbomole(logfileparser.Logfile):
             if "occupation" in line:
                 occupations = [float(occupation) for occupation in line.split()[1:]]
                 line = next(inputfile)
-            else:
-                occupations = [0.0] * len(indices)
+            
+            # If we have any missing occupations, fill with 0
+            occupations.extend([0.0] * (len(irreps) - len(occupations)))
                 
             # Add to list.
             orbitals.extend([
-                 {'index': index, 'energy_H': energy_H, 'energy_eV': energy_eV, 'occupancy': occupation}
-                 for index, energy_H, energy_eV, occupation
-                 in zip(indices, energies_hartree, energies_eV, occupations)
+                 {'irrep': irrep, 'energy_H': energy_H, 'energy_eV': energy_eV, 'occupancy': occupation}
+                 for irrep, energy_H, energy_eV, occupation
+                 in zip(irreps, energies_hartree, energies_eV, occupations)
             ])
             
         return orbitals, line
+    
+    
+    def determine_homo(self, mosyms, dscf_mos):
+        """
+        Determine the highest occupied molecular orbital.
         
+        Returns
+        -------
+        int
+            the index of the HOMO.
+        """
+        # First, we need a mapping between each irrep and its index in mosyms etc.
+        symm_count = {}
+        irreps = []
+        
+        for symm in mosyms:
+            try:
+                symm_count[symm] += 1
+            except KeyError:
+                symm_count[symm] = 1
+            
+            irreps.append((symm_count[symm], symm))
+            
+        # We also have occupancy info from dscf (but probably only for those orbitals close to the HOMO/LUMO gap).
+        # We now need to determine which orbital with occupancy is highest.
+        homo = 0
+        for mo in dscf_mos:
+            if mo['occupancy'] > 0:
+                # This orbital has electrons, determine its position out of all orbitals.
+                index = irreps.index(self.split_irrep(mo['irrep']))
+                if index > homo:
+                    homo = index
+                    
+        return homo
+                
 
     def deleting_modes(self, vibfreqs, vibdisps, vibirs, vibrmasses):
         """Deleting frequencies relating to translations or rotations"""
