@@ -74,7 +74,7 @@ class Turbomole(logfileparser.Logfile):
         return label.capitalize()
 
     def before_parsing(self):
-        self.geoopt = False # Is this a GeoOpt? Needed for SCF targets/values.
+        
         self.periodic_table = utils.PeriodicTable()
         self.new_module()
 
@@ -1103,6 +1103,7 @@ class Turbomole(logfileparser.Logfile):
         # All done for this loop.
         # Keep track of last lines.
         self.last_lines.append(line)
+        
     
     def split_irrep(self, irrep):
         """
