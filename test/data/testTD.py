@@ -131,7 +131,9 @@ class GenericTDTest:
         "Turbomole/basicTurbomole7.4/CO_adc2_TD",
         "Rotatory strengths are not currently available for ricc2",
     )
-    @skipForLogfile("ORCA/basicORCA6.0/dvb_eom_ccsd.log", "etrotats don't seem to be available for EOM-CCSD")
+    @skipForLogfile(
+        "ORCA/basicORCA6.0/dvb_eom_ccsd.log", "etrotats don't seem to be available for EOM-CCSD"
+    )
     def testrotatsnumber(self, data) -> None:
         """Is the length of etrotats correct?"""
         assert len(data.etrotats) == self.number
@@ -295,9 +297,9 @@ class OrcaROCISTest(GenericTDTest):
     def testsyms(self, data) -> None:
         """ROCIS does not show symmetries"""
         pass
-    
+
+
 class Orca6ROCISTest(OrcaROCISTest):
-    
     # The energies are different in 5 Vs 6 for some reason I can't fathom,
     # perhaps a setting has changed from some old default value?
     expected_l_max = 10.718302
