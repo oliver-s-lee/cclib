@@ -2205,7 +2205,7 @@ Dispersion correction           -0.016199959
                 for mode in range(0, 3 * self.natom, matrix_columns):
                     header = next(inputfile)
                     if self.version >= (6, 0) and not self.numfreq:
-                        irreps = next(inputfile)
+                        _irreps = next(inputfile)
 
                     for atom in range(self.natom):
                         all_vibdisps[mode : mode + matrix_columns, atom, 0] = next(
