@@ -134,8 +134,12 @@ class GenericTDTest:
     @skipForLogfile(
         "ORCA/basicORCA6.0/dvb_eom_ccsd.log", "etrotats are not printed by default in Orca 6"
     )
-    @skipForLogfile("ORCA/basicORCA6.0/dvb_adc2.log", "etrotats are not printed by default in Orca 6")
-    @skipForLogfile("ORCA/basicORCA6.0/dvb_pno_eom_ccsd.log", "etrotats are not printed by default in Orca 6")
+    @skipForLogfile(
+        "ORCA/basicORCA6.0/dvb_adc2.log", "etrotats are not printed by default in Orca 6"
+    )
+    @skipForLogfile(
+        "ORCA/basicORCA6.0/dvb_pno_eom_ccsd.log", "etrotats are not printed by default in Orca 6"
+    )
     def testrotatsnumber(self, data) -> None:
         """Is the length of etrotats correct?"""
         assert len(data.etrotats) == self.number
@@ -380,7 +384,6 @@ class OrcaADC2Test(OrcaETPostHFTest):
 
 
 class Orca6ADC2Test(OrcaADC2Test):
-    
     expected_f_max = 1.16
 
 
